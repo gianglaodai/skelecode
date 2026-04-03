@@ -26,11 +26,12 @@ Goal: end-to-end pipeline working with one language.
 - [ ] Implement `@vis`, `@impl`, `@ext`, `@calls`, `@static`, `@enum` tags
 - [ ] Output to stdout or file
 
-### 1.5 Mermaid Renderer
-- [ ] Generate `classDiagram` blocks per module
-- [ ] Map visibility to Mermaid markers (`+`, `-`, `#`, `~`)
-- [ ] Generate relationship arrows
-- [ ] Generate type kind stereotypes (`<<interface>>`, `<<enum>>`, etc.)
+### 1.5 Mermaid Renderer (Deprecated)
+- [x] Generate `classDiagram` blocks per module
+- [x] Map visibility to Mermaid markers (`+`, `-`, `#`, `~`)
+- [x] Generate relationship arrows
+- [x] Generate type kind stereotypes (`<<interface>>`, `<<enum>>`, etc.)
+- *Note: To be completely replaced by Obsidian Vault Renderer.*
 
 ### 1.6 CLI (basic)
 - [ ] `<PATH>` argument
@@ -39,25 +40,25 @@ Goal: end-to-end pipeline working with one language.
 - [ ] `--lang` flag (only `rust` available in this phase)
 
 ### 1.7 Testing
-- [ ] Create test fixtures: sample Rust files with known structures
-- [ ] Unit tests for Rust parser
-- [ ] Unit tests for both renderers
-- [ ] Integration test: Rust file → parse → render → verify output
+- [x] Create test fixtures: sample Rust files with known structures
+- [x] Unit tests for Rust parser
+- [x] Unit tests for both renderers
+- [x] Integration test: Rust file → parse → render → verify output
 
-**Deliverable**: `skelecode ./rust-project -f machine` works end-to-end.
+**Deliverable**: `skelecode ./rust-project -f machine` works end-to-end. (COMPLETED)
 
 ---
 
 ## Phase 2 — Java Parser
 
 ### 2.1 Java Parser
-- [ ] Add `tree-sitter-java` dependency
-- [ ] Parse: `class`, `interface`, `enum`, `record`
-- [ ] Extract fields, methods, constructors
-- [ ] Extract visibility (`public`, `private`, `protected`, package-private)
-- [ ] Extract `extends`, `implements` → `TypeRelation`
-- [ ] Extract annotations (`@Override`, `@Service`, etc.)
-- [ ] Call resolution Level 0: raw syntactic calls
+- [x] Add `tree-sitter-java` dependency
+- [x] Parse: `class`, `interface`, `enum`, `record`
+- [x] Extract fields, methods, constructors
+- [x] Extract visibility (`public`, `private`, `protected`, package-private)
+- [x] Extract `extends`, `implements` → `TypeRelation`
+- [x] Extract annotations (`@Override`, `@Service`, etc.)
+- [x] Call resolution Level 0: raw syntactic calls
 
 ### 2.2 Call Resolution — Level 1 (Phase 1 of resolution plan)
 - [ ] Resolve `this`/`self` calls for Rust and Java
@@ -148,12 +149,35 @@ Goal: end-to-end pipeline working with one language.
 
 ---
 
+## Phase 6 — Obsidian Vault Renderer (Replacing Mermaid)
+
+### 6.1 Remove Mermaid
+- [ ] Delete `src/renderer/mermaid.rs`
+- [ ] Remove all Mermaid integration from `app.rs`, `export.rs`, `ui.rs`
+- [ ] Update CLI arguments: remove `--output-mermaid`, add `--output-vault`
+
+### 6.2 Implement Obsidian Renderer
+- [ ] Create `src/renderer/obsidian.rs`
+- [ ] Export directory instead of single file
+- [ ] Convert each `Module` / `Type` to a markdown file
+- [ ] Map relationships (`@calls`, `extends`, `implements`) to `[[WikiLinks]]`
+- [ ] Generate `Index.md` overview
+
+### 6.3 Update Documentation
+- [ ] Update `architecture.md`, `cli.md`, `README.md`
+- [ ] Remove `output-formats.md` Mermaid section and document Obsidian schema
+
+**Deliverable**: Skelecode exports interactive Obsidian folders instead of static mermaid strings.
+
+---
+
 ## Progress Tracker
 
 | Phase | Status | Notes |
 |---|---|---|
-| Phase 1 — Foundation + Rust | Not started | |
-| Phase 2 — Java | Not started | |
+| Phase 1 — Foundation + Rust | ✅ Done | Replaced CLI-only with TUI |
+| Phase 2 — Java | ✅ Done | Tested on 68k+ LOC codebase |
 | Phase 3 — JS/TS | Not started | |
 | Phase 4 — Kotlin | Not started | |
-| Phase 5 — Polish | Not started | |
+| Phase 5 — Polish | ✅ Partially Done | TUI implemented, Level 1 resolution pending |
+| Phase 6 — Obsidian Vault | 🏃 In Progress | Planning phase |

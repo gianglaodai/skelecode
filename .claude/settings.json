@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:crates.io)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:github.com)",
+      "Bash(cargo build:*)",
+      "Bash(where link.exe)",
+      "Bash(rustup show:*)",
+      "Read(//c/Program Files/Microsoft Visual Studio/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/**)",
+      "Read(//c//**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/2022/**)",
+      "Read(//c/Program Files/Microsoft Visual Studio/2022/**)",
+      "Bash(wsl -e bash -c \"which rustc && rustc --version && which cargo\")",
+      "Bash(rustup target:*)",
+      "Bash(cargo clean:*)",
+      "Bash(rustup toolchain:*)",
+      "Bash(rustup default:*)",
+      "Bash(rustc --print sysroot)",
+      "Bash(cmd.exe /c \"where /R \\\\\"C:\\\\\\\\Program Files\\\\\" link.exe\")",
+      "Read(//c/Program Files \\(x86\\)/Windows Kits/**)",
+      "Bash(LIB=\"C:/Program Files \\(x86\\)/Windows Kits/10/Lib/10.0.26100.0/um/x64;C:/Program Files \\(x86\\)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64;C:/Program Files \\(x86\\)/Microsoft Visual Studio/18/BuildTools/VC/Tools/MSVC/14.50.35717/lib/x64\" INCLUDE=\"C:/Program Files \\(x86\\)/Windows Kits/10/Include/10.0.26100.0/ucrt;C:/Program Files \\(x86\\)/Microsoft Visual Studio/18/BuildTools/VC/Tools/MSVC/14.50.35717/include\" cargo build)",
+      "Bash(wsl -e bash -c \"which rustc 2>/dev/null && rustc --version || echo 'Rust not installed'\")",
+      "Bash(wsl -e bash -c \"curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y 2>&1 && source ~/.cargo/env && rustc --version\")",
+      "Bash(wsl -e bash -c \"cc --version 2>/dev/null || \\(sudo apt-get update && sudo apt-get install -y build-essential\\) 2>&1 | tail -5\")",
+      "Bash(wsl -e bash -c \"source ~/.cargo/env && cd /mnt/d/Work/workspace/gh/skelecode && cargo build 2>&1\")",
+      "Bash(wsl -e bash -c \"source ~/.cargo/env && cd /mnt/d/Work/workspace/gh/skelecode && cargo test 2>&1\")",
+      "Bash(wsl -e:*)",
+      "Bash(grep -v \"^$\")",
+      "Read(//mnt/d/Work/workspace/gh/**)",
+      "Bash(cargo check:*)"
+    ]
+  }
+}

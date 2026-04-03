@@ -1,0 +1,14 @@
+[package]
+name = "skelecode"
+version = "0.1.0"
+edition = "2024"
+description = "Code structure scanner that generates project-wide context graphs for humans and AI"
+
+[dependencies]
+clap = { version = "4.6.0", features = ["derive"] }
+tree-sitter = "0.26.8"
+tree-sitter-rust = "0.24.2"
+walkdir = "2.5.0"
+ratatui = "0.30.0"
+crossterm = "0.29.0"
+tree-sitter-java = "0.23.5"

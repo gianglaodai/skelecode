@@ -43,6 +43,7 @@ impl LanguageParser for JavaParser {
         let mut package_name = String::new();
         let mut types = Vec::new();
         let functions = Vec::new();
+        let mut imports = Vec::new();
 
         let mut cursor = root.walk();
         for child in root.children(&mut cursor) {
@@ -50,6 +51,11 @@ impl LanguageParser for JavaParser {
                 "package_declaration" => {
                     if let Some(pkg_name) = parse_package_name(child, source) {
                         package_name = pkg_name;
+                    }
+                }
+                "import_declaration" => {
+                    if let Some(imp) = parse_java_import(child, source) {
+                        imports.push(imp);
                     }
                 }
                 "class_declaration" => {
@@ -91,12 +97,46 @@ impl LanguageParser for JavaParser {
             language: Language::Java,
             types,
             functions,
+            imports,
         })
     }
 }
 
 fn node_text<'a>(node: Node<'a>, source: &'a str) -> &'a str {
     &source[node.byte_range()]
+}
+
+// ─── Import parsing ─────────────────────────────────────────────────────────────
+
+fn parse_java_import(node: Node, source: &str) -> Option<ImportedName> {
+    let raw = node_text(node, source).trim();
+    let raw = raw.strip_prefix("import").unwrap_or(raw).trim();
+    let raw = raw.strip_prefix("static").unwrap_or(raw).trim();
+    let raw = raw.strip_suffix(';').unwrap_or(raw).trim();
+
+    // Skip wildcards
+    if raw.ends_with(".*") {
+        return None;
+    }
+
+    dot_qualified(raw, None)
+}
+
+/// Split `"a.b.ClassName"` at the last dot into `module_path::ClassName`.
+/// Only accepts names whose last segment starts with an uppercase letter.
+fn dot_qualified(path: &str, alias_override: Option<&str>) -> Option<ImportedName> {
+    let dot = path.rfind('.')?;
+    let module_path = &path[..dot];
+    let type_name = &path[dot + 1..];
+    // Heuristic: type names start with uppercase
+    if !type_name.starts_with(|c: char| c.is_uppercase()) {
+        return None;
+    }
+    let alias = alias_override.unwrap_or(type_name);
+    Some(ImportedName {
+        alias: alias.to_string(),
+        qualified: format!("{}::{}", module_path, type_name),
+    })
 }
 
 fn parse_package_name(node: Node, source: &str) -> Option<String> {
@@ -403,6 +443,7 @@ fn parse_record(node: Node, source: &str) -> Option<TypeDef> {
                             return_type: None, // Constructors have no return type
                             visibility: m_mods.visibility,
                             calls,
+                            callers: Vec::new(),
                             annotations: Vec::new(),
                             is_static: false,
                         });
@@ -477,6 +518,7 @@ fn parse_method(node: Node, source: &str) -> Option<Method> {
         return_type,
         visibility: mods.visibility,
         calls,
+        callers: Vec::new(),
         annotations: Vec::new(),
         is_static: mods.is_static,
     })
@@ -501,6 +543,7 @@ fn parse_constructor(node: Node, source: &str) -> Option<Method> {
         return_type: None, // Constructors don't have return types
         visibility: mods.visibility,
         calls,
+        callers: Vec::new(),
         annotations: Vec::new(),
         is_static: false, // Constructors evaluate as non-static
     })

@@ -4,18 +4,18 @@ use crossterm::event::KeyCode;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExportFormat {
     Machine,
-    Mermaid,
+    Vault,
     Both,
 }
 
 impl ExportFormat {
     pub const ALL: &'static [ExportFormat] =
-        &[ExportFormat::Machine, ExportFormat::Mermaid, ExportFormat::Both];
+        &[ExportFormat::Machine, ExportFormat::Vault, ExportFormat::Both];
 
     pub fn label(self) -> &'static str {
         match self {
             ExportFormat::Machine => "Machine Context",
-            ExportFormat::Mermaid => "Mermaid",
+            ExportFormat::Vault => "Obsidian Vault (Directory)",
             ExportFormat::Both => "Both",
         }
     }
@@ -23,8 +23,8 @@ impl ExportFormat {
     pub fn default_filename(self) -> &'static str {
         match self {
             ExportFormat::Machine => "context.txt",
-            ExportFormat::Mermaid => "diagram.md",
-            ExportFormat::Both => "output.txt",
+            ExportFormat::Vault => "my_vault",
+            ExportFormat::Both => "output",
         }
     }
 }

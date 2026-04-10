@@ -2,94 +2,99 @@
 
 Skelecode produces two output formats from the same unified IR. Both formats contain the same structural information, optimized for different consumers.
 
-## Mermaid Format
+## Obsidian Vault Format
 
 ### Purpose
 
-Human-friendly visual diagrams, renderable in GitHub Markdown, VSCode preview, Mermaid Live Editor, and documentation tools.
+Human-friendly, interactive knowledge graph for browsing large codebases. Instead of a single static diagram, Skelecode generates a "Vault" folder that uses Obsidian's native Graph View and WikiLinks to map relationships.
 
-### Class Diagram
+### Vault Structure
 
-Each module produces a `classDiagram` block:
-
-```mermaid
-classDiagram
-    class UserService {
-        -UserRepository repo
-        -CacheManager cache
-        +findUser(Long id) Optional~User~
-        +saveUser(User user) User
-        -validateUser(User user) boolean
-    }
-
-    class UserRepository {
-        <<interface>>
-        +findById(Long id) Optional~User~
-        +save(User user) User
-    }
-
-    UserService ..|> Serializable : implements
-    UserService --> UserRepository : uses
-```
-
-### Visibility Markers
-
-| Marker | Meaning |
+| File/Folder | Description |
 |---|---|
-| `+` | public |
-| `-` | private |
-| `#` | protected |
-| `~` | package-private / internal / pub(crate) |
+| `Index.md` | Root file listing all modules and entry points. |
+| `modules/` | Directory containing one `.md` file per project module. |
+| `types/` | Directory containing one `.md` file per type (struct, class, enum). |
+| `Topology.canvas` | Native Obsidian Canvas file for visual architecture mapping. |
 
-### Relationship Arrows
+### Semantic Links (Dataview/Juggl)
 
-| Arrow | Meaning | Example |
-|---|---|---|
-| `<\|--` | extends (inheritance) | `Animal <\|-- Dog` |
-| `..\|>` | implements | `UserService ..\|> Serializable` |
-| `-->` | calls / uses | `Parser --> Lexer` |
+Skelecode uses **Inline Fields** (`key:: value`) compatible with plugins like **Dataview** and **Juggl** to label relationships on the graph:
 
-### Type Kind Stereotypes
+- `defines:: [[Type]]` — Module contains a type definition.
+- `contains:: [[Module]]` — Project contains a module.
+- `member-of:: [[Module]]` — Type belongs to a module.
+- `extends:: [[Type]]`, `implements:: [[Type]]` — Inheritance / Trait mapping.
+- `calls:: [[Type|Type::Method]]` — Method-level forward call.
+- `called-by:: [[Type|Type::Method]]` — Method-level reverse call.
+- `edge-label:: "label"` — Hint for the **Juggl** plugin (e.g. "calls", "called-by").
 
-Types annotated with their kind for clarity:
+### Metadata & Tags
 
-```mermaid
-classDiagram
-    class Serializable {
-        <<interface>>
-    }
-    class Color {
-        <<enum>>
-        RED
-        GREEN
-        BLUE
-    }
-    class UserDto {
-        <<record>>
-    }
+Every note includes YAML frontmatter with tags for automatic color-coding in the Obsidian Graph:
+
+```markdown
+---
+tags:
+  - type
+  - struct
+kind: "struct"
+name: "Parser"
+module: "src/parser"
+language: "rust"
+visibility: "pub"
+---
+
+# struct Parser
+
+- member-of:: [[src_parser|src/parser (module)]]
+- kind:: struct
+- visibility:: pub
+
+## Fields
+
+| Name | Type | Visibility |
+|------|------|------------|
+| `source` | `String` | pub |
+| `pos` | `usize` | private |
+
+## Methods
+
+### `new(String)` `static`
+**Returns:** `Self`
+
+### `parse()`
+**Returns:** `Result<AST>`
+
+**Calls:**
+- calls:: [[lexer_Token|Lexer::tokenize]]
+  - edge-label:: "calls"
+- calls:: [[ast_AST|AST::new]]
+  - edge-label:: "calls"
+
+**Called by:**
+- called-by:: [[parser_mod|Parser::run]]
 ```
 
-### Scaling Strategy
+---
 
-For large projects, diagrams are split by module to avoid unreadable mega-graphs:
+## Obsidian Canvas (Visual Topology)
 
-```
-## Module: com.example.service
+### Purpose
 
-​```mermaid
-classDiagram
-    ...
-​```
+A native, interactive board (`Topology.canvas`) within the Obsidian vault that provides a pre-laid-out visual map of the project's architecture with **labeled arrows**.
 
-## Module: com.example.repository
+### Features
 
-​```mermaid
-classDiagram
-    ...
-​```
-```
-
-Cross-module relationships are listed in a separate summary section.
+- **Grid Layout**: Modules are arranged in a multi-column grid.
+- **Grouping**: Types are visually grouped inside their respective module containers.
+- **Labeled Edges**: Every relationship arrow is explicitly labeled (e.g., "calls", "defines") for immediate clarity without hovering.
+- **Color Coding**:
+    - **Red**: Classes / Objects
+    - **Green**: Structs
+    - **Purple**: Traits / Interfaces
+    - **Orange**: Enums + Call relationships
+    - **Cyan**: Modules
 
 ---
 
@@ -121,11 +126,9 @@ All tags use the `@` prefix. Indentation indicates nesting (2 spaces per level).
 | `@fn` | nested/top | Method or function | `@fn findUser(Long)->Optional<User>` |
 | `@ext` | nested | Extends (inheritance) | `@ext AbstractService` |
 | `@impl` | nested | Implements interface/trait | `@impl Serializable` |
-| `@calls` | suffix | Direct call references | `@calls[repo.findById, cache.get]` |
-| `@ann` | suffix | Annotations/decorators | `@ann @RestController` |
-| `@gen` | suffix | Generic type parameters | `@gen <T, U>` |
-| `@export` | suffix | Exported (JS/TS) | `@export` |
 | `@static` | suffix | Static method/field | `@static` |
+| `@calls` | suffix | Direct forward calls | `@calls[repo.save, cache.invalidate]` |
+| `@callers` | suffix | Direct reverse calls (incoming) | `@callers[Service::process]` |
 | `@enum` | nested | Enum variants | `@enum Red, Green, Blue` |
 
 ### Full Example — Java
@@ -211,6 +214,21 @@ All tags use the `@` prefix. Indentation indicates nesting (2 spaces per level).
 @fn tokenize(&str)->Vec<Token> @vis pub @calls[Token::new, classify_char]
 @type Token [struct] {kind:TokenKind, span:Span, text:String}
   @vis pub
+
+### Full Example — Python
+
+```python
+@lang python
+@mod src.models.user
+@type User [class] {name:str, _age:int}
+  @vis public
+  @fn greet()->str @calls[this.name] @callers[AuthService::verify]
+
+@mod src.services.auth
+@type AuthService [class]
+  @vis public
+  @fn verify(User)->boolean @calls[src.models.user::User::greet]
+```
 ```
 
 ### Design Principles

@@ -4,7 +4,7 @@ use crate::ir::*;
 pub struct MachineRenderer;
 
 impl Renderer for MachineRenderer {
-    fn render(&self, project: &Project) -> String {
+    fn render(&self, project: &Project) -> crate::renderer::RenderOutput {
         let mut out = String::new();
 
         // Group modules by path (e.g., lib.rs + main.rs both yield "crate"),
@@ -39,7 +39,7 @@ impl Renderer for MachineRenderer {
             render_module_group(path, modules, &mut out);
         }
 
-        out
+        crate::renderer::RenderOutput::Single(out)
     }
 }
 
@@ -56,7 +56,7 @@ fn render_module_group(path: &str, modules: &[&Module], out: &mut String) {
     let mod_tag = match modules[0].language {
         Language::Java | Language::Kotlin => "@pkg",
         Language::JavaScript => "@file",
-        Language::Rust => "@mod",
+        Language::Rust | Language::Python => "@mod",
     };
     out.push_str(&format!("{} {}\n", mod_tag, path));
 
@@ -124,6 +124,13 @@ fn render_type(td: &TypeDef, out: &mut String) {
     }
 }
 
+/// Sanitize a call/caller string for use inside `@calls[...]` / `@callers[...]`.
+/// Replaces `[` → `(` and `]` → `)` so that subscript expressions in
+/// Kotlin/JS (e.g. `params[KEY]`) do not prematurely close the bracket list.
+fn sanitize_call(s: &str) -> String {
+    s.replace('[', "(").replace(']', ")")
+}
+
 fn render_method(method: &Method, out: &mut String) {
     let params: Vec<String> = method.params.iter().map(|p| format!("{}", p)).collect();
     let mut line = format!("  @fn {}({})", method.name, params.join(", "));
@@ -146,8 +153,13 @@ fn render_method(method: &Method, out: &mut String) {
     }
 
     if !method.calls.is_empty() {
-        let calls: Vec<String> = method.calls.iter().map(|c| format!("{}", c)).collect();
+        let calls: Vec<String> = method.calls.iter().map(|c| sanitize_call(&format!("{}", c))).collect();
         line.push_str(&format!(" @calls[{}]", calls.join(", ")));
+    }
+
+    if !method.callers.is_empty() {
+        let callers: Vec<String> = method.callers.iter().map(|c| sanitize_call(&format!("{}", c))).collect();
+        line.push_str(&format!(" @callers[{}]", callers.join(", ")));
     }
 
     out.push_str(&line);
@@ -167,8 +179,13 @@ fn render_function(func: &Function, out: &mut String) {
     }
 
     if !func.calls.is_empty() {
-        let calls: Vec<String> = func.calls.iter().map(|c| format!("{}", c)).collect();
+        let calls: Vec<String> = func.calls.iter().map(|c| sanitize_call(&format!("{}", c))).collect();
         line.push_str(&format!(" @calls[{}]", calls.join(", ")));
+    }
+
+    if !func.callers.is_empty() {
+        let callers: Vec<String> = func.callers.iter().map(|c| sanitize_call(&format!("{}", c))).collect();
+        line.push_str(&format!(" @callers[{}]", callers.join(", ")));
     }
 
     out.push_str(&line);
@@ -210,6 +227,7 @@ mod tests {
                             return_type: Some("Self".to_string()),
                             visibility: Visibility::Public,
                             calls: Vec::new(),
+                            callers: Vec::new(),
                             annotations: Vec::new(),
                             is_static: true,
                         },
@@ -228,6 +246,7 @@ mod tests {
                                     target_method: "new".to_string(),
                                 },
                             ],
+                            callers: Vec::new(),
                             annotations: Vec::new(),
                             is_static: false,
                         },
@@ -246,7 +265,9 @@ mod tests {
                     return_type: None,
                     visibility: Visibility::Private,
                     calls: Vec::new(),
+                    callers: Vec::new(),
                 }],
+                imports: Vec::new(),
             }],
         }
     }
@@ -254,7 +275,10 @@ mod tests {
     #[test]
     fn test_machine_output() {
         let renderer = MachineRenderer;
-        let output = renderer.render(&sample_project());
+        let output = match renderer.render(&sample_project()) {
+            crate::renderer::RenderOutput::Single(out) => out,
+            _ => panic!("Expected single output"),
+        };
 
         assert!(output.contains("@lang rust"));
         assert!(output.contains("@mod parser"));

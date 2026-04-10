@@ -35,27 +35,27 @@ impl FocusedField {
 pub enum LangOption {
     All,
     Rust,
-    Java,
-    JavaScript,
-    Kotlin,
+    JavaBased,
+    JsTs,
+    Python,
 }
 
 impl LangOption {
     pub const ALL_OPTIONS: &'static [LangOption] = &[
         LangOption::All,
         LangOption::Rust,
-        LangOption::Java,
-        LangOption::JavaScript,
-        LangOption::Kotlin,
+        LangOption::JavaBased,
+        LangOption::JsTs,
+        LangOption::Python,
     ];
 
     pub fn label(self) -> &'static str {
         match self {
             LangOption::All => "All",
             LangOption::Rust => "Rust",
-            LangOption::Java => "Java",
-            LangOption::JavaScript => "JavaScript",
-            LangOption::Kotlin => "Kotlin",
+            LangOption::JavaBased => "Java Based",
+            LangOption::JsTs => "JS/TS",
+            LangOption::Python => "Python",
         }
     }
 }

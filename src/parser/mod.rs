@@ -1,5 +1,8 @@
 pub mod rust;
 pub mod java;
+pub mod kotlin;
+pub mod jsts;
+pub mod python;
 
 use crate::ir::{Language, Module};
 use std::path::Path;
@@ -17,6 +20,7 @@ pub fn detect_language(path: &Path) -> Option<Language> {
         "java" => Some(Language::Java),
         "js" | "jsx" | "ts" | "tsx" => Some(Language::JavaScript),
         "kt" | "kts" => Some(Language::Kotlin),
+        "py" => Some(Language::Python),
         _ => None,
     }
 }

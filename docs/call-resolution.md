@@ -1,4 +1,4 @@
-# Call Resolution Strategy
+# Call Resolution Guide
 
 ## The Challenge
 
@@ -28,7 +28,7 @@ Record calls exactly as they appear in syntax. No type resolution.
 - **Pro**: trivial to implement, never wrong
 - **Con**: AI must infer types from surrounding context
 
-### Level 1 — Heuristic Type Resolution (target for v1)
+### Level 1 — Heuristic Type Resolution (✅ Implemented)
 
 Use type information already available within the same file/class to resolve variable types.
 
@@ -61,7 +61,7 @@ class UserService {
 
 **Estimated coverage: ~85-90% of calls in a typical codebase.**
 
-### Level 2 — Import-Aware Resolution (enhancement)
+### Level 2 — Import-Aware Resolution (✅ Implemented)
 
 Combine Level 1 with import/use statements to resolve fully qualified module paths.
 
@@ -77,32 +77,28 @@ use crate::parser::Parser;
 
 This does not help resolve *more* calls, but enriches already-resolved calls with cross-module path information.
 
-### Level 3 — Full Type Inference (out of scope)
+### Level 3 — Reverse Call Graph (✅ Implemented)
+
+After resolving forward calls (Level 1 & 2), Skelecode performs a final graph pass to link targets back to their callers.
+
+- **`CallerRef`**: Each `Method` or `Function` now contains a `callers: Vec<CallerRef>` list.
+- **Searchable Architecture**: Enables the "Called by" view in TUI and the `called-by::` back-links in Obsidian.
+- **Bi-directional Topology**: Allows the Renderer to draw arrows from target to source in Graph views.
+
+### Level 4 — Full Type Inference (out of scope)
 
 Requires compiler-level analysis: tracking types through `var`/`auto` inference, generic instantiation, trait resolution, etc. This is effectively rebuilding half the compiler for each language.
 
 **Not planned.** The cost-to-benefit ratio is poor for a structural analysis tool.
 
-## Implementation Plan
+## Implementation Phases
 
-### Phase 1 (v1): Level 0 + partial Level 1
-
-- Resolve `this`/`self` calls → trivial, 100% accurate
-- Resolve static / type-level calls (e.g. `ClassName.method()`, `Type::method()`) → trivial, 100% accurate
-- Resolve calls on fields with known types → read field declarations from the same class
-- Resolve calls on parameters with explicit types → read method signature
-
-### Phase 2 (v2): Full Level 1
-
-- Resolve calls on local variables with explicit type annotations
-- Resolve calls on constructor-assigned variables (`new Foo()` / `Foo::new()`)
-- Track return types for single-level method chaining (`getX().doY()`)
-
-### Phase 3 (v3): Level 2
-
-- Parse import/use statements per file
-- Map resolved type names to their fully qualified module paths
-- Enable cross-module call graph edges in the output
+| Phase | Goal | Status |
+|---|---|---|
+| **Phase 7** | Local Type Heuristics (this, self, fields) | ✅ Done |
+| **Phase 8** | Cross-module Import Resolution | ✅ Done |
+| **Phase 10** | Reverse Call Graph (Bi-directional linking) | ✅ Done |
+| **Future** | Chaining & Type Alias follow-through | 🛠️ Backlog |
 
 ## Unresolved Call Representation
 

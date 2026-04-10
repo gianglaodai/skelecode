@@ -45,10 +45,14 @@ impl LanguageParser for RustParser {
 
         // Collect all impl blocks first, then attach methods to types
         let mut impl_blocks: Vec<ImplBlock> = Vec::new();
+        let mut imports = Vec::new();
 
         let mut cursor = root.walk();
         for child in root.children(&mut cursor) {
             match child.kind() {
+                "use_declaration" => {
+                    imports.extend(parse_rust_use(child, source));
+                }
                 "struct_item" => {
                     if let Some(td) = parse_struct(child, source) {
                         types.push(td);
@@ -110,6 +114,7 @@ impl LanguageParser for RustParser {
             language: Language::Rust,
             types,
             functions,
+            imports,
         })
     }
 }
@@ -388,6 +393,7 @@ fn parse_method(node: Node, source: &str, _in_impl: bool) -> Option<Method> {
         return_type,
         visibility,
         calls,
+        callers: Vec::new(),
         annotations: Vec::new(),
         is_static,
     })
@@ -413,6 +419,7 @@ fn parse_free_function(node: Node, source: &str) -> Option<Function> {
         return_type,
         visibility,
         calls,
+        callers: Vec::new(),
     })
 }
 
@@ -559,6 +566,94 @@ fn collect_calls(node: Node, source: &str, calls: &mut Vec<CallRef>) {
     for child in node.children(&mut cursor) {
         collect_calls(child, source, calls);
     }
+}
+
+// ─── Import parsing ─────────────────────────────────────────────────────────────
+
+fn parse_rust_use(node: Node, source: &str) -> Vec<ImportedName> {
+    let raw = node_text(node, source).trim();
+    let raw = raw.strip_prefix("use").unwrap_or(raw).trim();
+    let raw = raw.strip_suffix(';').unwrap_or(raw).trim();
+    collect_rust_use_names(raw, "")
+}
+
+/// Recursively collect `ImportedName`s from a (possibly grouped) use path.
+/// `prefix` is the accumulated path from outer brace groups.
+fn collect_rust_use_names(path: &str, prefix: &str) -> Vec<ImportedName> {
+    // Brace group: "a::b::{C, D}" or "{C, D}" (when called recursively)
+    if let Some(brace_start) = path.find('{') {
+        let before = path[..brace_start].trim_end_matches(':').trim();
+        let new_prefix = match (prefix.is_empty(), before.is_empty()) {
+            (true, _) => before.to_string(),
+            (_, true) => prefix.to_string(),
+            _ => format!("{}::{}", prefix, before),
+        };
+        let end = path.rfind('}').unwrap_or(path.len());
+        let inner = path[brace_start + 1..end].trim();
+        return split_brace_list(inner)
+            .into_iter()
+            .flat_map(|item| collect_rust_use_names(item.trim(), &new_prefix))
+            .collect();
+    }
+
+    // Skip wildcards and `self` entries
+    if path == "*" || path.ends_with("::*") || path == "self" {
+        return Vec::new();
+    }
+
+    let full = if prefix.is_empty() {
+        path.to_string()
+    } else {
+        format!("{}::{}", prefix, path)
+    };
+
+    // Alias: "a::b::C as D"
+    if let Some(as_idx) = full.find(" as ") {
+        let orig = full[..as_idx].trim();
+        let alias = full[as_idx + 4..].trim();
+        return rust_qualified(orig)
+            .map(|q| vec![ImportedName { alias: alias.to_string(), qualified: q }])
+            .unwrap_or_default();
+    }
+
+    // Simple: last segment is the alias
+    if let Some(alias) = full.rsplit("::").next().filter(|s| !s.is_empty()) {
+        return rust_qualified(&full)
+            .map(|q| vec![ImportedName { alias: alias.to_string(), qualified: q }])
+            .unwrap_or_default();
+    }
+
+    Vec::new()
+}
+
+/// Strip `crate::` prefix; return `None` for unresolvable relative paths.
+fn rust_qualified(path: &str) -> Option<String> {
+    if path.starts_with("super::") || path.starts_with("self::") {
+        return None;
+    }
+    Some(path.strip_prefix("crate::").unwrap_or(path).to_string())
+}
+
+/// Split a brace list `"A, B, C::D"` on top-level commas (depth-aware).
+fn split_brace_list(s: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0usize;
+    let mut start = 0;
+    for (i, c) in s.char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                parts.push(&s[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    if start < s.len() {
+        parts.push(&s[start..]);
+    }
+    parts
 }
 
 #[cfg(test)]

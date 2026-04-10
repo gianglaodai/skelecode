@@ -16,13 +16,12 @@ skelecode [OPTIONS] [PATH]
 
 | Option | Short | Default | Description |
 |---|---|---|---|
-| `--format <FORMAT>` | `-f` | `both` | Output format: `mermaid`, `machine`, or `both` |
-| `--output <FILE>` | `-o` | stdout | Write output to file. When `--format both`, use this flag twice or use `--output-mermaid` / `--output-machine` |
-| `--output-mermaid <FILE>` | | | Write Mermaid output to specific file |
+| `--format <FORMAT>` | `-f` | `vault` | Output format: `vault` (Obsidian), `machine`, or `both` |
+| `--output <DIR/FILE>` | `-o` | stdout | Write output. For `vault`, expected to be a directory. |
+| `--output-vault <DIR>` | | | Write Obsidian Vault to specific directory |
 | `--output-machine <FILE>` | | | Write Machine Context output to specific file |
-| `--lang <LANG>` | `-l` | auto-detect | Filter by language: `java`, `js`, `kotlin`, `rust`. Can be specified multiple times |
-| `--exclude <PATTERN>` | `-e` | | Glob patterns to exclude (e.g. `**/test/**`). Can be specified multiple times |
-| `--include <PATTERN>` | `-i` | | Glob patterns to include. If specified, only matching files are scanned |
+| `--lang <LANG>` | `-l` | auto-detect | Filter by language: `rust`, `javabased` (java/kotlin), `jsts` (js/ts), `python` |
+| `--exclude <PATTERN>` | `-e` | | Glob patterns to exclude (can be specified multiple times) |
 | `--tui` | | `false` | Launch interactive TUI mode (default when no output flags given) |
 | `--verbose` | `-v` | `false` | Print progress information to stderr |
 | `--help` | `-h` | | Print help information |
@@ -43,11 +42,11 @@ skelecode
 ### Format Selection
 
 ```bash
-# Mermaid only (for documentation)
-skelecode ./my-project -f mermaid
+# Obsidian Vault only (for human browsing)
+skelecode ./my-project -f vault -o ./vault
 
 # Machine Context only (for AI consumption)
-skelecode ./my-project -f machine
+skelecode ./my-project -f machine -o context.txt
 
 # Both formats (default)
 skelecode ./my-project -f both
@@ -60,20 +59,20 @@ skelecode ./my-project -f both
 skelecode ./my-project -f machine -o context.txt
 
 # Both formats to separate files
-skelecode ./my-project --output-mermaid docs/diagram.md --output-machine docs/context.txt
+skelecode ./my-project --output-vault docs/vault --output-machine docs/context.txt
 
-# Mermaid to file, Machine Context to stdout
-skelecode ./my-project --output-mermaid docs/diagram.md -f both
+# Vault to directory, Machine Context to stdout
+skelecode ./my-project --output-vault docs/vault -f machine
 ```
 
 ### Language Filtering
 
 ```bash
-# Only Java files
-skelecode ./my-project -l java
+# Only Java/Kotlin files
+skelecode ./my-project -l javabased
 
-# Java and Kotlin
-skelecode ./my-project -l java -l kotlin
+# Java/Kotlin and JS/TS
+skelecode ./my-project -l javabased -l jsts
 
 # Only Rust
 skelecode ./my-project -l rust
@@ -92,42 +91,54 @@ skelecode ./my-project -i "src/main/java/com/example/core/**"
 skelecode ./my-project -e "**/generated/**" -e "**/build/**"
 ```
 
-### Performance Options
+### Performance & Exclusions
 
 ```bash
-# Skip call graph analysis for faster structural overview
-skelecode ./my-project --no-calls
+# Exclude build artifacts (though many are excluded by default)
+skelecode ./my-project -e "**/target/**" -e "**/node_modules/**"
 
-# Verbose output (progress to stderr, results to stdout)
-skelecode ./my-project -v -f machine -o context.txt
+# Verbose output (scan stats to stderr)
+skelecode ./my-project -v -f machine
 ```
 
 ### Combined
 
 ```bash
 # Scan Java/Kotlin sources, exclude tests, output Machine Context to file
-skelecode ./my-project -l java -l kotlin -e "**/test/**" -f machine -o ai-context.txt
+skelecode ./my-project -l javabased -e "**/test/**" -f machine -o ai-context.txt
 
-# Generate documentation diagrams
-skelecode ./my-project -f mermaid --output-mermaid docs/architecture.md
+# Generate documentation Vault
+skelecode ./my-project -f vault --output-vault ./docs/architecture_vault
 
-### Interactive TUI mode
+## TUI Mode Interaction
 
-```bash
-# Launch and browse a project interactively
-skelecode ./my-project
+When running in interactive mode, the following keys are available:
 
-# Launch TUI and pre-filter for Java
-skelecode ./my-project -l java
+| Key | Action |
+|---|---|
+| `↑` / `k` / `↓` / `j` | Navigate tree |
+| `Enter` / `l` / `→` | Expand node / Toggle details |
+| `h` / `←` | Collapse node / Jump to parent |
+| `/` | **Symbol Search** (live filtering / highlighting) |
+| `Tab` | Switch between **Machine Context** and **Obsidian Preview** |
+| `y` | **Copy** current detail panel content to clipboard |
+| `u` / `d` | **Scroll** detail panel up / down |
+| `e` | Open Export Overlay |
+| `g` / `G` | Jump to Top / Bottom |
+| `b` / `Esc` | **Back** to Welcome Screen (configuration) |
+| `q` | Quit |
 
-# Launch TUI and exclude specific folders
-skelecode ./my-project -e "**/target/**"
-```
+### Export Overlay
+Pressing `e` opens a non-blocking dialog where you can:
+- Select export format (Vault / Machine).
+- Cycle through options with `Tab` or `j`/`k`.
+- Type an output path.
+- Press `Enter` on the `[Export]` button to run.
 
 ## Output Behavior
 
-- When `--output` / `--output-mermaid` / `--output-machine` is not specified, output goes to **stdout**
-- When `--format both` with a single `--output`, both formats are written to the same file separated by a header
+- When `--output` / `--output-vault` / `--output-machine` is not specified, output goes to **stdout**
+- When `--format both` with a single `--output`, Machine Context is written to the file and Vault is written to a subdirectory if output is a directory.
 - Progress and diagnostic messages (with `--verbose`) go to **stderr**, keeping stdout clean for piping
 - Exit code `0` on success, non-zero on error
 
@@ -141,5 +152,6 @@ When `--lang` is not specified, Skelecode detects languages by file extension:
 | `.js`, `.jsx`, `.ts`, `.tsx` | JavaScript |
 | `.kt`, `.kts` | Kotlin |
 | `.rs` | Rust |
+| `.py` | Python |
 
 Files with unrecognized extensions are silently skipped.

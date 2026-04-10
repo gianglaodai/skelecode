@@ -13,23 +13,23 @@ Skelecode solves this by scanning the project once and producing a **compact str
 ## How It Works
 
 ```
-Source Code  ──►  Parser (per language)  ──►  Unified IR  ──►  Output
-  .java                                                         ├── TUI (interactive)
-  .js/.ts          tree-sitter based          language-          ├── Mermaid (human)
-  .kt                                         agnostic          └── Machine Context (AI)
-  .rs                                         model
+Source Code  ──►  Parser  ──►  Resolution Layer  ──►  Unified IR  ──►  Output
+  .java           (per lang)      (Level 1 & 2)       (agnostic)      ├── TUI (interactive)
+  .js/.ts                                                             ├── Obsidian (human)
+  .kt                                                                 └── Machine Context (AI)
+  .rs
 ```
 
 1. **Parse** — language-specific parsers extract structural information from source files
 2. **Model** — parsed data is normalized into a unified intermediate representation (IR)
-3. **Render** — the IR is presented via interactive TUI, or rendered to Mermaid / Machine Context formats
+3. **Render** — the IR is presented via interactive TUI, or rendered to Obsidian Vault / Machine Context formats
 
 ## Output Modes
 
 | Mode | Audience | Description |
 |---|---|---|
 | **TUI** | Developers | Interactive terminal UI — browse modules, types, methods with keyboard navigation |
-| **Mermaid** | Humans | Visual class/call diagrams, renderable in GitHub, VSCode, docs |
+| **Obsidian** | Humans | Interactive knowledge graph and visual canvas for browsing code architecture |
 | **Machine Context** | AI | Ultra-compact token-optimized format for LLM consumption |
 
 Estimated token savings with Machine Context: **~90-95% reduction** compared to reading raw source code, while preserving structural and relational information.
@@ -38,10 +38,11 @@ Estimated token savings with Machine Context: **~90-95% reduction** compared to 
 
 | Language | Extensions | Key Constructs | Status |
 |---|---|---|---|
-| Rust | `.rs` | struct, enum, trait, impl, mod | Implemented |
-| Java | `.java` | class, interface, enum, record, annotations | Implemented |
-| JavaScript | `.js`, `.ts`, `.jsx`, `.tsx` | class, function, arrow function, export | Planned |
-| Kotlin | `.kt`, `.kts` | class, interface, object, data class, annotations | Planned |
+| Rust | `.rs` | struct, enum, trait, impl, mod | Stable |
+| Java | `.java` | class, interface, enum, record, annotations | Stable |
+| JavaScript | `.js`, `.ts`, `.jsx`, `.tsx` | class, function, arrow function, export | Stable |
+| Kotlin | `.kt`, `.kts` | class, interface, object, data class, annotations | Stable |
+| Python | `.py` | class, function, annotations, import | Stable |
 
 ## Installation
 
@@ -90,13 +91,16 @@ The TUI launches automatically when no `--format` or `--output` flags are given.
 ```
   ↑ / k         Move up
   ↓ / j         Move down
-  → / l / Enter  Expand node
+  → / l / Enter  Expand node / Toggle details
   ← / h         Collapse node / jump to parent
-  Tab           Switch detail panel (Machine Context ↔ Mermaid)
-  g             Jump to top
-  G             Jump to bottom
-  e             Open Export Overlay (Machine Context / Mermaid)
-  q / Esc       Quit
+  /             Symbol Search (live filter)
+  Tab           Switch detail panel (Machine Context ↔ Obsidian Preview)
+  u / d         Scroll detail panel up / down
+  y             Copy current detail panel to clipboard
+  g / G         Jump to top / bottom
+  e             Open Export Overlay (Machine Context / Obsidian Vault)
+  b / Esc       Back to Welcome Screen
+  q             Quit
 ```
 
 ### TUI layout
@@ -116,8 +120,8 @@ The TUI launches automatically when no `--format` or `--output` flags are given.
 │                              │   new(String)->Self [static]        │
 │ 3 modules, 12 types          │   parse()->Result<AST>              │
 ├──────────────────────────────┴─────────────────────────────────────┤
-│ ↑↓/jk Navigate  ←→/hl Collapse/Expand  Tab [Machine]  q Quit      │
-│ e Export                                                           │
+│ ↑↓ Navigate  ←→ Expand  / Search  Tab [Machine]  y Copy  e Export  │
+│ b Back  q Quit                                                     │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -133,14 +137,14 @@ Use `--format` or `--output` to switch to CLI mode, suitable for piping and file
 # Output Machine Context to stdout
 skelecode /path/to/project --format machine
 
-# Output Mermaid to file
-skelecode /path/to/project --format mermaid -o diagram.md
+# Output Obsidian Vault to directory
+skelecode /path/to/project --format vault -o ./vault
 
 # Output Machine Context to file
 skelecode /path/to/project --format machine -o context.txt
 
-# Both formats to separate files
-skelecode /path/to/project --output-mermaid diagram.md --output-machine context.txt
+# Both formats to separate locations
+skelecode /path/to/project --output-vault ./vault --output-machine context.txt
 
 # Filter by language, exclude test directories
 skelecode /path/to/project --lang rust --exclude "**/test/**"
@@ -169,28 +173,18 @@ See [CLI Usage](cli.md) for the full list of options.
   @fn tokenize(&str)->Vec<Token> @vis pub
 ```
 
-### Mermaid
+### Obsidian Topology (Canvas)
 
-```mermaid
-classDiagram
-    class Parser {
-        -String source
-        -usize pos
-        +new(String source) Self$
-        +parse() Result~AST~
-    }
-    class Lexer {
-        -String input
-        +tokenize(str input) Vec~Token~
-    }
-    Parser ..|> Display : implements
-    Parser --> Lexer : uses
-```
+Skelecode generates a `Topology.canvas` file that provides a visual map of the project architecture with labeled relationship arrows, viewable natively in Obsidian.
+
+- **Modules** are containers.
+- **Types** are nodes.
+- **Arrows** represent inheritance and calls.
 
 ## Documentation
 
 - [Architecture](architecture.md) — system design, parser layer, unified IR, renderer layer
-- [Output Formats](output-formats.md) — detailed specification of Mermaid and Machine Context formats
+- [Output Formats](output-formats.md) — detailed specification of Obsidian Vault and Machine Context formats
 - [CLI Usage](cli.md) — command-line arguments and options
 - [Call Resolution](call-resolution.md) — strategy and roadmap for resolving method call targets across languages
 - [Implementation Plan](plan.md) — phased roadmap with task tracking

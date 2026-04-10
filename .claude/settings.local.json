@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo test:*)",
+      "Bash(cargo run:*)",
+      "Bash(taskkill /f /im skelecode.exe)",
+      "WebFetch(domain:jsoncanvas.org)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(cargo search:*)",
+      "Bash(cargo doc:*)",
+      "Bash(cargo metadata:*)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(p['name'],p['version'],p.get\\('dependencies',''\\)\\) for p in d['packages'] if 'tree-sitter' in p['name']]\")",
+      "Bash(cargo tree:*)",
+      "Bash(mkdir -p /tmp/kotlin-test/src)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo add:*)"
+    ]
+  }
+}

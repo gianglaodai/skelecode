@@ -8,6 +8,7 @@ pub enum Language {
     Java,
     JavaScript,
     Kotlin,
+    Python,
 }
 
 impl Language {
@@ -17,6 +18,7 @@ impl Language {
             Language::Java => "java",
             Language::JavaScript => "js",
             Language::Kotlin => "kotlin",
+            Language::Python => "python",
         }
     }
 }
@@ -103,6 +105,23 @@ impl std::fmt::Display for CallRef {
     }
 }
 
+/// Reverse call reference: records which caller invokes a given method/function.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallerRef {
+    /// `None` if the caller is a free function (not inside any type).
+    pub source_type: Option<String>,
+    pub source_method: String,
+}
+
+impl std::fmt::Display for CallerRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.source_type {
+            Some(t) => write!(f, "{}::{}", t, self.source_method),
+            None => write!(f, "{}", self.source_method),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeRelation {
     pub kind: RelationKind,
@@ -144,6 +163,7 @@ pub struct Method {
     pub return_type: Option<String>,
     pub visibility: Visibility,
     pub calls: Vec<CallRef>,
+    pub callers: Vec<CallerRef>,
     pub annotations: Vec<Annotation>,
     pub is_static: bool,
 }
@@ -155,6 +175,7 @@ pub struct Function {
     pub return_type: Option<String>,
     pub visibility: Visibility,
     pub calls: Vec<CallRef>,
+    pub callers: Vec<CallerRef>,
 }
 
 #[derive(Debug, Clone)]
@@ -176,6 +197,19 @@ pub struct Module {
     pub language: Language,
     pub types: Vec<TypeDef>,
     pub functions: Vec<Function>,
+    /// Imported names parsed from `use`/`import` statements in this file.
+    pub imports: Vec<ImportedName>,
+}
+
+/// A single imported name, produced by `use` / `import` statements.
+///
+/// `alias`     — the short identifier used in source code
+/// `qualified` — canonical `"{module_path}::{TypeName}"` form;
+///               `sanitize_name(qualified)` yields the Obsidian type-file stem
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportedName {
+    pub alias: String,
+    pub qualified: String,
 }
 
 #[derive(Debug, Clone)]

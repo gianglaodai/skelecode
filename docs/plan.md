@@ -1,183 +1,76 @@
-# Implementation Plan
+# Project Roadmap & Evolution
 
-## Phase 1 — Foundation + Rust Parser (MVP)
+This document tracks the phased evolution of Skelecode from inception to the stable v1.0 release.
 
-Goal: end-to-end pipeline working with one language.
+## Completed Phases
 
-### 1.1 Project Setup
-- [ ] Add dependencies to `Cargo.toml`: `clap`, `tree-sitter`, `tree-sitter-rust`
-- [ ] Set up module structure: `ir/`, `parser/`, `renderer/`
+### ✅ Phase 1: Core Foundation
+- Defined Unified IR (Intermediate Representation).
+- Implemented basic Rust parser with Tree-sitter.
+- Created Machine Context renderer for AI-ready output.
 
-### 1.2 Unified IR
-- [ ] Define core types: `Project`, `Module`, `TypeDef`, `Field`, `Method`, `Function`, `CallRef`, `TypeRelation`, `Annotation`
-- [ ] Define enums: `Language`, `TypeKind`, `Visibility`, `RelationKind`
+### ✅ Phase 2: CLI & TUI
+- Robust CLI with Clap.
+- Interactive TUI using Ratatui.
+- Support for language filtering and exclusions.
 
-### 1.3 Rust Parser
-- [ ] File discovery: walk directory, filter `.rs` files
-- [ ] Parse with tree-sitter-rust: extract `struct`, `enum`, `trait`
-- [ ] Extract fields from struct definitions
-- [ ] Extract `fn` from `impl` blocks → `Method`, module-level `fn` → `Function`
-- [ ] Extract visibility (`pub`, `pub(crate)`, private)
-- [ ] Extract `impl Trait for Type` → `TypeRelation`
-- [ ] Call resolution Level 0: raw syntactic calls from method bodies
+### ✅ Phase 3: Java Support
+- Full Java parser (class, interface, enum, record).
+- Integration with Unified IR.
 
-### 1.4 Machine Context Renderer
-- [ ] Implement `@lang`, `@mod`, `@type`, `@fn`, `@field` tags
-- [ ] Implement `@vis`, `@impl`, `@ext`, `@calls`, `@static`, `@enum` tags
-- [ ] Output to stdout or file
+### ✅ Phase 4: Kotlin Support
+- Kotlin parser (data classes, objects, properties).
+- Support for Kotlin-specific constructs.
 
-### 1.5 Mermaid Renderer (Deprecated)
-- [x] Generate `classDiagram` blocks per module
-- [x] Map visibility to Mermaid markers (`+`, `-`, `#`, `~`)
-- [x] Generate relationship arrows
-- [x] Generate type kind stereotypes (`<<interface>>`, `<<enum>>`, etc.)
-- *Note: To be completely replaced by Obsidian Vault Renderer.*
+### ✅ Phase 5: JavaScript & TypeScript Support
+- Parsers for `.js`, `.ts`, `.jsx`, `.tsx`.
+- Support for functional and class-based patterns.
+- Module-as-file mapping for JS ecosystem.
 
-### 1.6 CLI (basic)
-- [ ] `<PATH>` argument
-- [ ] `--format` flag: `mermaid`, `machine`, `both`
-- [ ] `--output` flag
-- [ ] `--lang` flag (only `rust` available in this phase)
+### ✅ Phase 6: Obsidian Vault Migration
+- Removed legacy Mermaid.js renderer due to scalability limits.
+- Implemented **Obsidian Vault Renderer** generating interlinked Markdown files.
+- Added **Visual Topology** via native Obsidian Canvas generation.
 
-### 1.7 Testing
-- [x] Create test fixtures: sample Rust files with known structures
-- [x] Unit tests for Rust parser
-- [x] Unit tests for both renderers
-- [x] Integration test: Rust file → parse → render → verify output
+### ✅ Phase 7: Call Resolution (Level 1)
+- Resolve `this`/`self` calls to current type.
+- Resolve calls on fields with explicit types.
+- Resolve calls on method/function parameters.
+- `base_type()` strips `&mut`, `Box<>`, `Arc<>`, `Option<>`, `?` decorators.
 
-**Deliverable**: `skelecode ./rust-project -f machine` works end-to-end. (COMPLETED)
+### ✅ Phase 8: Call Resolution (Level 2)
+- Parse `import`/`use` statements for all languages.
+- Map type aliases to fully qualified paths.
+- Cross-module call graph edges in Obsidian Graph View.
+- Auto-exclude build output directories (`target/`, `bin/`, `build/`, etc.).
 
----
-
-## Phase 2 — Java Parser
-
-### 2.1 Java Parser
-- [x] Add `tree-sitter-java` dependency
-- [x] Parse: `class`, `interface`, `enum`, `record`
-- [x] Extract fields, methods, constructors
-- [x] Extract visibility (`public`, `private`, `protected`, package-private)
-- [x] Extract `extends`, `implements` → `TypeRelation`
-- [x] Extract annotations (`@Override`, `@Service`, etc.)
-- [x] Call resolution Level 0: raw syntactic calls
-
-### 2.2 Call Resolution — Level 1 (Phase 1 of resolution plan)
-- [ ] Resolve `this`/`self` calls for Rust and Java
-- [ ] Resolve static/type-level calls (`ClassName.method()`, `Type::method()`)
-- [ ] Resolve calls on fields with known types (field declarations in same class)
-- [ ] Resolve calls on parameters with explicit types
-
-### 2.3 Testing
-- [ ] Test fixtures: sample Java files
-- [ ] Unit tests for Java parser
-- [ ] Unit tests for Level 1 call resolution
-- [ ] Integration test: Java project end-to-end
-
-**Deliverable**: Java + Rust support, calls partially resolved.
+### ✅ Phase 9: UI Polish & Export Enhancements
+- Richer Dataview/Juggl metadata in Obsidian vault (YAML frontmatter, inline fields, edge labels).
+- Fields rendered as Markdown tables; relations with `edge-label::` hints.
+- TUI "Obsidian Preview" tab shows per-type/method/function Obsidian markdown.
+- Copy to Clipboard (`y`) for current detail panel content.
+- Back navigation (`Esc`/`b`) from main view to welcome screen.
+- Structure panel scrolling with `ListState`.
+- Detail panel scrolling with `u`/`d`.
 
 ---
 
-## Phase 3 — JavaScript/TypeScript Parser
+## Future Roadmap
 
-### 3.1 JS/TS Parser
-- [ ] Add `tree-sitter-javascript` and `tree-sitter-typescript` dependencies
-- [ ] Parse: `class`, `function`, arrow functions
-- [ ] Extract `export` → `Visibility::Public`
-- [ ] Extract class fields/properties, methods
-- [ ] Extract `extends` → `TypeRelation`
-- [ ] Handle both JS and TS (TS has type annotations → better resolution)
-- [ ] Call resolution Level 0 + Level 1 where types available
+### ✅ Phase 10: Reverse Call Graph
+- Added `CallerRef` to IR; `callers: Vec<CallerRef>` on `Method` and `Function`.
+- `resolve_reverse_calls()` post-processes forward call graph to populate reverse edges.
+- Machine Context emits `@callers[...]` alongside `@calls[...]`.
+- Obsidian vault emits `called-by::` inline fields with Juggl-compatible links.
+- TUI Detail panel shows "Called by" section for method and function nodes.
 
-### 3.2 Testing
-- [ ] Test fixtures: JS and TS files
-- [ ] Unit tests
-- [ ] Integration test
+### ✅ Phase 11: Python Support
+- Parser for Python (classes, functions, imports, decorators).
+- `typed_parameter` extraction, `__init__` field inference, `self.*` call tracking.
+- Map to Unified IR; integrated into TUI, CLI, and Obsidian/Machine renderers.
 
-**Deliverable**: Java + JS/TS + Rust support.
-
----
-
-## Phase 4 — Kotlin Parser
-
-### 4.1 Kotlin Parser
-- [ ] Add `tree-sitter-kotlin` dependency
-- [ ] Parse: `class`, `interface`, `object`, `data class`, `sealed class`
-- [ ] Extract `val`/`var` properties
-- [ ] Extract `fun` methods
-- [ ] Extract visibility (`public`, `private`, `protected`, `internal`)
-- [ ] Extract `: SuperClass`, `: Interface` → `TypeRelation`
-- [ ] Extract annotations
-- [ ] Call resolution Level 0 + Level 1
-
-### 4.2 Testing
-- [ ] Test fixtures: Kotlin files
-- [ ] Unit tests
-- [ ] Integration test
-
-**Deliverable**: All 4 languages supported.
-
----
-
-## Phase 5 — CLI Polish + Call Resolution Level 2
-
-### 5.1 CLI enhancements
-- [ ] `--exclude` / `--include` glob filters
-- [ ] `--no-calls` flag
-- [ ] `--verbose` flag
-- [ ] `--output-mermaid` / `--output-machine` separate output files
-- [ ] Better error messages and progress reporting
-
-### 5.2 Call Resolution — Level 1 full (Phase 2 of resolution plan)
-- [ ] Resolve calls on local variables with explicit type annotations
-- [ ] Resolve constructor-assigned variables (`new Foo()` / `Foo::new()`)
-- [ ] Single-level return type chaining (`getX().doY()`)
-
-### 5.3 Call Resolution — Level 2 (Phase 3 of resolution plan)
-- [ ] Parse import/use statements per file
-- [ ] Map type names to fully qualified module paths
-- [ ] Cross-module call graph edges
-
-### 5.4 Mermaid Scaling
-- [ ] Split large diagrams by module
-- [ ] Cross-module relationship summary section
-
-### 5.5 Testing
-- [ ] End-to-end tests with multi-language projects
-- [ ] Call resolution accuracy tests
-- [ ] Large project stress test
-
-**Deliverable**: Production-ready tool.
-
----
-
-## Phase 6 — Obsidian Vault Renderer (Replacing Mermaid)
-
-### 6.1 Remove Mermaid
-- [ ] Delete `src/renderer/mermaid.rs`
-- [ ] Remove all Mermaid integration from `app.rs`, `export.rs`, `ui.rs`
-- [ ] Update CLI arguments: remove `--output-mermaid`, add `--output-vault`
-
-### 6.2 Implement Obsidian Renderer
-- [ ] Create `src/renderer/obsidian.rs`
-- [ ] Export directory instead of single file
-- [ ] Convert each `Module` / `Type` to a markdown file
-- [ ] Map relationships (`@calls`, `extends`, `implements`) to `[[WikiLinks]]`
-- [ ] Generate `Index.md` overview
-
-### 6.3 Update Documentation
-- [ ] Update `architecture.md`, `cli.md`, `README.md`
-- [ ] Remove `output-formats.md` Mermaid section and document Obsidian schema
-
-**Deliverable**: Skelecode exports interactive Obsidian folders instead of static mermaid strings.
-
----
-
-## Progress Tracker
-
-| Phase | Status | Notes |
-|---|---|---|
-| Phase 1 — Foundation + Rust | ✅ Done | Replaced CLI-only with TUI |
-| Phase 2 — Java | ✅ Done | Tested on 68k+ LOC codebase |
-| Phase 3 — JS/TS | Not started | |
-| Phase 4 — Kotlin | Not started | |
-| Phase 5 — Polish | ✅ Partially Done | TUI implemented, Level 1 resolution pending |
-| Phase 6 — Obsidian Vault | 🏃 In Progress | Planning phase |
+### ✅ Phase 12: Symbol Search
+- Press `/` to enter search mode; type to filter the structure tree in real-time.
+- Matched text highlighted (yellow background) in tree; parent module shown as context.
+- `Enter` commits filter (stays active for navigation); `Esc` clears filter.
+- Match count shown in tree title bottom; search bar replaces help bar while active.

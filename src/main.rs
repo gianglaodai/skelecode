@@ -2,12 +2,12 @@ use clap::{Parser, ValueEnum};
 use skelecode::ir::Language;
 use skelecode::renderer::Renderer;
 use skelecode::renderer::machine::MachineRenderer;
-use skelecode::renderer::mermaid::MermaidRenderer;
+use skelecode::renderer::obsidian::ObsidianRenderer;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, ValueEnum)]
 enum OutputFormat {
-    Mermaid,
+    Vault,
     Machine,
     Both,
 }
@@ -15,19 +15,21 @@ enum OutputFormat {
 #[derive(Debug, Clone, ValueEnum)]
 enum LangFilter {
     Rust,
-    Java,
-    #[value(alias = "javascript", alias = "ts", alias = "typescript")]
-    Js,
-    Kotlin,
+    #[value(alias = "java", alias = "kotlin", alias = "kt")]
+    JavaBased,
+    #[value(alias = "javascript", alias = "typescript", alias = "ts")]
+    JsTs,
+    #[value(alias = "python", alias = "py")]
+    Python,
 }
 
 impl LangFilter {
-    fn to_language(&self) -> Language {
+    fn to_languages(&self) -> Vec<Language> {
         match self {
-            LangFilter::Rust => Language::Rust,
-            LangFilter::Java => Language::Java,
-            LangFilter::Js => Language::JavaScript,
-            LangFilter::Kotlin => Language::Kotlin,
+            LangFilter::Rust => vec![Language::Rust],
+            LangFilter::JavaBased => vec![Language::Java, Language::Kotlin],
+            LangFilter::JsTs => vec![Language::JavaScript],
+            LangFilter::Python => vec![Language::Python],
         }
     }
 }
@@ -47,9 +49,9 @@ struct Cli {
     #[arg(short, long)]
     output: Option<PathBuf>,
 
-    /// Write Mermaid output to specific file
+    /// Write Vault output to specific directory
     #[arg(long)]
-    output_mermaid: Option<PathBuf>,
+    output_vault: Option<PathBuf>,
 
     /// Write Machine Context output to specific file
     #[arg(long)]
@@ -78,7 +80,7 @@ fn main() {
     // Decide mode: TUI (interactive) vs CLI (pipe-friendly)
     let want_cli_output = cli.format.is_some()
         || cli.output.is_some()
-        || cli.output_mermaid.is_some()
+        || cli.output_vault.is_some()
         || cli.output_machine.is_some();
 
     let use_tui = cli.tui || !want_cli_output;
@@ -102,7 +104,7 @@ fn main() {
                 }
 
                 let languages: Vec<Language> =
-                    cli.lang.iter().map(|l| l.to_language()).collect();
+                    cli.lang.iter().flat_map(|l| l.to_languages()).collect();
                 let project = skelecode::scan_project(path, &languages, &cli.exclude);
 
                 if cli.verbose {
@@ -131,7 +133,7 @@ fn main() {
         eprintln!("Scanning {}...", path.display());
     }
 
-    let languages: Vec<Language> = cli.lang.iter().map(|l| l.to_language()).collect();
+    let languages: Vec<Language> = cli.lang.iter().flat_map(|l| l.to_languages()).collect();
     let project = skelecode::scan_project(path, &languages, &cli.exclude);
 
     if cli.verbose {
@@ -140,8 +142,8 @@ fn main() {
 
     let format = cli.format.unwrap_or(OutputFormat::Both);
 
-    let mermaid_output = match format {
-        OutputFormat::Mermaid | OutputFormat::Both => Some(MermaidRenderer.render(&project)),
+    let vault_output = match format {
+        OutputFormat::Vault | OutputFormat::Both => Some(ObsidianRenderer.render(&project)),
         _ => None,
     };
 
@@ -151,49 +153,52 @@ fn main() {
     };
 
     // Write outputs
-    if let Some(ref path) = cli.output_mermaid
-        && let Some(ref content) = mermaid_output
+    if let Some(ref path) = cli.output_vault
+        && let Some(skelecode::renderer::RenderOutput::Multiple(files)) = vault_output.as_ref()
     {
-        write_file(path, content);
+        write_vault(path, files);
     }
 
     if let Some(ref path) = cli.output_machine
-        && let Some(ref content) = machine_output
+        && let Some(skelecode::renderer::RenderOutput::Single(content)) = machine_output.as_ref()
     {
         write_file(path, content);
     }
 
-    // If specific output files are set, don't write to --output or stdout for those formats
-    let mermaid_to_general = mermaid_output
-        .as_ref()
-        .filter(|_| cli.output_mermaid.is_none());
-    let machine_to_general = machine_output
-        .as_ref()
-        .filter(|_| cli.output_machine.is_none());
+    // If --output is set, write the general outputs
+    // Vault cannot be written to a single file, so if OutputFormat::Vault is selected
+    // and neither output_vault nor output is set, we use stdout just for Machine or error?
+    // Let's decide: if they use --output with Vault, they mean a directory.
+    let mut general_machine = None;
 
-    let mut general_output = String::new();
-
-    if let Some(content) = mermaid_to_general {
-        if !general_output.is_empty() {
-            general_output.push_str("\n---\n\n");
+    if let Some(skelecode::renderer::RenderOutput::Single(content)) = machine_output {
+        if cli.output_machine.is_none() {
+            general_machine = Some(content);
         }
-        general_output.push_str("# Mermaid Diagram\n\n");
-        general_output.push_str(content);
     }
 
-    if let Some(content) = machine_to_general {
-        if !general_output.is_empty() {
-            general_output.push_str("\n---\n\n");
+    if let Some(skelecode::renderer::RenderOutput::Multiple(files)) = vault_output {
+        if cli.output_vault.is_none() {
+            if let Some(ref path) = cli.output {
+                write_vault(path, &files);
+            } else {
+                eprintln!("Warning: Cannot write Vault format to stdout. Use --output or --output-vault.");
+            }
         }
-        general_output.push_str("# Machine Context\n\n");
-        general_output.push_str(content);
     }
 
-    if !general_output.is_empty() {
+    if let Some(content) = general_machine {
         if let Some(ref path) = cli.output {
-            write_file(path, &general_output);
+            // Note: If both vault and machine are writing to --output, it's ambiguous.
+            // But if --output is a dir for vault, we might write machine to `output/machine.md`?
+            // Let's just write to path. If they mix, they should use specific flags.
+            if path.is_dir() {
+                write_file(&path.join("MachineContext.md"), &content);
+            } else {
+                write_file(path, &content);
+            }
         } else {
-            print!("{}", general_output);
+            println!("{}", content);
         }
     }
 }
@@ -224,5 +229,26 @@ fn write_file(path: &PathBuf, content: &str) {
     if let Err(e) = std::fs::write(path, content) {
         eprintln!("Error writing to {}: {}", path.display(), e);
         std::process::exit(1);
+    }
+}
+
+fn write_vault(base_path: &PathBuf, files: &[(PathBuf, String)]) {
+    if let Err(e) = std::fs::create_dir_all(base_path) {
+        eprintln!("Error creating directory {}: {}", base_path.display(), e);
+        std::process::exit(1);
+    }
+    
+    // Create subdirectories
+    let modules_dir = base_path.join("modules");
+    let types_dir = base_path.join("types");
+    
+    let _ = std::fs::create_dir_all(&modules_dir);
+    let _ = std::fs::create_dir_all(&types_dir);
+
+    for (rel_path, content) in files {
+        let full_path = base_path.join(rel_path);
+        if let Err(e) = std::fs::write(&full_path, content) {
+            eprintln!("Error writing vault file {}: {}", full_path.display(), e);
+        }
     }
 }

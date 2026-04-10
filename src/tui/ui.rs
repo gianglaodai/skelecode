@@ -11,7 +11,7 @@ use super::welcome::{FocusedField, LangOption, WelcomeApp};
 
 // ─── Main View ───────────────────────────────────────────────────────────────
 
-pub fn draw(frame: &mut Frame, app: &App) {
+pub fn draw(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(3), Constraint::Length(3)])
@@ -27,10 +27,19 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     draw_tree(frame, app, main_chunks[0]);
     draw_detail(frame, app, main_chunks[1]);
-    draw_help(frame, app, help_area);
+
+    if app.search_mode || !app.search_query.is_empty() {
+        draw_search_bar(frame, app, help_area);
+    } else {
+        draw_help(frame, app, help_area);
+    }
 }
 
-fn draw_tree(frame: &mut Frame, app: &App, area: Rect) {
+fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
+    let selected = app.selected;
+    let query = app.search_query.to_lowercase();
+    let searching = !query.is_empty();
+
     let items: Vec<ListItem> = app
         .visible
         .iter()
@@ -38,7 +47,7 @@ fn draw_tree(frame: &mut Frame, app: &App, area: Rect) {
         .map(|(i, &node_idx)| {
             let node = &app.nodes[node_idx];
             let indent = "  ".repeat(node.depth as usize);
-            let arrow = if node.has_children {
+            let arrow = if node.has_children && !searching {
                 if node.expanded { "▼ " } else { "▶ " }
             } else {
                 "  "
@@ -56,64 +65,131 @@ fn draw_tree(frame: &mut Frame, app: &App, area: Rect) {
                 _ => "   ",
             };
 
-            let style = if i == app.selected {
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                match node.depth {
-                    0 => Style::default()
-                        .fg(Color::Yellow)
+            let prefix = format!("{}{}{}", indent, arrow, icon);
+            let is_selected = i == selected;
+            let is_match = searching && node.label.to_lowercase().contains(&query);
+
+            if is_selected {
+                // Selected row: render as a single styled string
+                let text = format!("{}{}", prefix, node.label);
+                ListItem::new(text).style(
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
+                )
+            } else if is_match && searching {
+                // Highlight the matched portion of the label
+                let label = &node.label;
+                let label_lower = label.to_lowercase();
+                let base_style = match node.depth {
+                    0 => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
                     1 => Style::default().fg(Color::Green),
                     _ => Style::default().fg(Color::White),
-                }
-            };
+                };
+                let mut spans: Vec<Span> = vec![Span::styled(prefix, base_style)];
 
-            let text = format!("{}{}{}{}", indent, arrow, icon, node.label);
-            ListItem::new(text).style(style)
+                // Split label around the first match and highlight it
+                if let Some(pos) = label_lower.find(&query) {
+                    let before = &label[..pos];
+                    let matched = &label[pos..pos + query.len()];
+                    let after = &label[pos + query.len()..];
+                    if !before.is_empty() {
+                        spans.push(Span::styled(before.to_string(), base_style));
+                    }
+                    spans.push(Span::styled(
+                        matched.to_string(),
+                        Style::default()
+                            .fg(Color::Black)
+                            .bg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ));
+                    if !after.is_empty() {
+                        spans.push(Span::styled(after.to_string(), base_style));
+                    }
+                } else {
+                    spans.push(Span::styled(label.to_string(), base_style));
+                }
+
+                ListItem::new(Line::from(spans))
+            } else {
+                // Normal unselected, non-matching row
+                let style = match node.depth {
+                    0 => Style::default()
+                        .fg(if searching { Color::DarkGray } else { Color::Yellow })
+                        .add_modifier(if searching { Modifier::empty() } else { Modifier::BOLD }),
+                    1 => Style::default().fg(if searching { Color::DarkGray } else { Color::Green }),
+                    _ => Style::default().fg(Color::DarkGray),
+                };
+                let text = format!("{}{}", prefix, node.label);
+                ListItem::new(text).style(style)
+            }
         })
         .collect();
 
-    let stats = format!(
-        " {} modules, {} types ",
-        app.project.modules.len(),
-        app.project
-            .modules
-            .iter()
-            .map(|m| m.types.len())
-            .sum::<usize>()
-    );
+    let match_count = if searching {
+        app.visible.iter()
+            .filter(|&&i| app.nodes[i].label.to_lowercase().contains(&query))
+            .count()
+    } else {
+        0
+    };
 
-    let tree = List::new(items).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(" Structure ")
-            .title_bottom(stats)
-            .border_style(Style::default().fg(Color::Cyan)),
-    );
+    let stats = if searching {
+        format!(" {} match{} ", match_count, if match_count == 1 { "" } else { "es" })
+    } else {
+        format!(
+            " {} modules, {} types ",
+            app.project.modules.len(),
+            app.project.modules.iter().map(|m| m.types.len()).sum::<usize>()
+        )
+    };
 
-    frame.render_widget(tree, area);
+    let title = if searching {
+        format!(" Structure  [/{}] ", app.search_query)
+    } else {
+        " Structure ".to_string()
+    };
+
+    let border_color = if searching { Color::Yellow } else { Color::Cyan };
+
+    let tree = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .title_bottom(stats)
+                .border_style(Style::default().fg(border_color)),
+        )
+        .highlight_style(Style::default());
+
+    frame.render_stateful_widget(tree, area, &mut app.list_state);
 }
 
 fn draw_detail(frame: &mut Frame, app: &App, area: Rect) {
     let tab_title = match app.tab {
         DetailTab::Machine => " Detail [Machine Context] ",
-        DetailTab::Mermaid => " Detail [Mermaid] ",
+        DetailTab::Obsidian => " Detail [Obsidian Preview] ",
     };
 
-    let content = if let Some(node) = app.selected_node() {
+    let content: String = if let Some(node) = app.selected_node() {
         match app.tab {
-            DetailTab::Machine => &node.detail,
-            DetailTab::Mermaid => &node.detail, // For now both show same detail
+            DetailTab::Machine => node.detail_machine.clone(),
+            DetailTab::Obsidian => {
+                if node.detail_obsidian.is_empty() {
+                    format!("(No Obsidian preview for {})", node.label)
+                } else {
+                    node.detail_obsidian.clone()
+                }
+            }
         }
     } else {
-        "No item selected"
+        String::new()
     };
 
     // Syntax highlight the detail content
     let lines: Vec<Line> = content
+        .as_str()
         .lines()
         .map(|line| {
             if line.starts_with('@') || line.contains("@fn") || line.contains("@type") {
@@ -153,7 +229,8 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect) {
                 .title(tab_title)
                 .border_style(Style::default().fg(Color::Magenta)),
         )
-        .wrap(Wrap { trim: false });
+        .wrap(Wrap { trim: false })
+        .scroll((app.detail_scroll, 0));
 
     frame.render_widget(detail, area);
 }
@@ -216,20 +293,28 @@ fn highlight_tags(
 
 fn draw_help(frame: &mut Frame, app: &App, area: Rect) {
     let tab_indicator = match app.tab {
-        DetailTab::Machine => "[Machine]  Mermaid ",
-        DetailTab::Mermaid => " Machine  [Mermaid]",
+        DetailTab::Machine => "[Machine]  Obsidian ",
+        DetailTab::Obsidian => " Machine  [Obsidian]",
     };
 
     let help = Line::from(vec![
         Span::styled(" ↑↓/jk ", Style::default().fg(Color::Cyan).bold()),
-        Span::raw("Navigate  "),
+        Span::raw("Nav  "),
         Span::styled("←→/hl ", Style::default().fg(Color::Cyan).bold()),
         Span::raw("Expand  "),
+        Span::styled("/ ", Style::default().fg(Color::Yellow).bold()),
+        Span::raw("Search  "),
+        Span::styled("u/d ", Style::default().fg(Color::Green).bold()),
+        Span::raw("Scroll  "),
         Span::styled("Tab ", Style::default().fg(Color::Cyan).bold()),
         Span::raw(tab_indicator),
         Span::raw("  "),
+        Span::styled("y ", Style::default().fg(Color::Green).bold()),
+        Span::raw("Copy  "),
         Span::styled("e ", Style::default().fg(Color::Yellow).bold()),
         Span::styled("Export  ", Style::default().fg(Color::White)),
+        Span::styled("b ", Style::default().fg(Color::Cyan).bold()),
+        Span::raw("Back  "),
         Span::styled("q ", Style::default().fg(Color::Cyan).bold()),
         Span::raw("Quit"),
     ]);
@@ -241,6 +326,51 @@ fn draw_help(frame: &mut Frame, app: &App, area: Rect) {
     );
 
     frame.render_widget(help_bar, area);
+}
+
+fn draw_search_bar(frame: &mut Frame, app: &App, area: Rect) {
+    let query_display = if app.search_mode {
+        format!("{}▌", app.search_query)
+    } else {
+        app.search_query.clone()
+    };
+
+    let match_count = app.visible.iter()
+        .filter(|&&i| app.nodes[i].label.to_lowercase().contains(&app.search_query.to_lowercase()))
+        .count();
+
+    let status = if app.search_query.is_empty() {
+        String::new()
+    } else {
+        format!("  {} match{}", match_count, if match_count == 1 { "" } else { "es" })
+    };
+
+    let hint = if app.search_mode {
+        "  Enter Confirm  Esc Clear"
+    } else {
+        "  / Search again  Esc Clear filter"
+    };
+
+    let bar = Line::from(vec![
+        Span::styled(" Search: ", Style::default().fg(Color::Yellow).bold()),
+        Span::styled(
+            query_display,
+            Style::default()
+                .fg(Color::White)
+                .bg(Color::Rgb(40, 40, 60))
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(status, Style::default().fg(Color::Green).bold()),
+        Span::styled(hint, Style::default().fg(Color::DarkGray)),
+    ]);
+
+    let bar_widget = Paragraph::new(bar).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow)),
+    );
+
+    frame.render_widget(bar_widget, area);
 }
 
 // ─── Welcome Screen ───────────────────────────────────────────────────────────
@@ -657,7 +787,7 @@ fn draw_export_path(frame: &mut Frame, export: &ExportApp, area: Rect) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(" Output File ")
+        .title(" Output Path/Dir ")
         .title_style(
             Style::default()
                 .fg(label_color)
@@ -695,12 +825,12 @@ fn draw_export_button(frame: &mut Frame, export: &ExportApp, area: Rect) {
     let (btn_style, label) = if focused {
         (
             Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD),
-            "  ↗  Export to File  ",
+            "  ↗  Export  ",
         )
     } else {
         (
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-            "  ↗  Export to File  ",
+            "  ↗  Export  ",
         )
     };
 

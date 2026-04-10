@@ -5,16 +5,16 @@
 Skelecode follows a three-layer pipeline architecture:
 
 ```
-│ Parser Layer │────►│  Unified IR  │──┬─►│Renderer Layer│
-│ (per lang)   │     │  (language-  │  │  │ - Mermaid    │
-│              │     │   agnostic)  │  │  │ - Machine    │
-│  tree-sitter │     └──────────────┘  │  └──────────────┘
-└─────────────┘                        │
-                                       ▼
-                                 ┌────────────┐
-                                 │ TUI Layer  │
-                                 │ (ratatui)  │
-                                 └────────────┘
+│ Parser Layer │    │ Resolution Layer │    │  Unified IR  │──┬─►│Renderer Layer│
+│ (per lang)   │───►│ (Phase 7, 8, 10) │───►│  (language-  │  │  │ - Obsidian   │
+│              │    │                  │    │   agnostic)  │  │  │ - Machine    │
+│  tree-sitter │    │   heuristics     │    └──────────────┘  │  └──────────────┘
+└─────────────┘    └──────────────────┘                      │
+                                                              ▼
+                                                        ┌────────────┐
+                                                        │ TUI Layer  │
+                                                        │ (ratatui)  │
+                                                        └────────────┘
 ```
 
 Each layer has a single responsibility and communicates through well-defined data structures.
@@ -30,10 +30,10 @@ Extract structural information from source code files. Each language has its own
 All parsers are built on [tree-sitter](https://tree-sitter.github.io/tree-sitter/) — an incremental parsing library that provides concrete syntax trees for source files.
 
 Why tree-sitter:
-- **Multi-language** — grammar available for Java, JS/TS, Kotlin, Rust, and many more
-- **Robust** — handles partial/invalid syntax gracefully (important for real-world codebases)
-- **Fast** — incremental parsing, written in C
-- **Rust bindings** — first-class `tree-sitter` crate for Rust
+- **Multi-language** — grammar available for Java, JS/TS, Kotlin, Rust, and more
+- **Robust** — handles partial/invalid syntax gracefully
+- **Fast** — incremental parsing
+- **Rust bindings** — first-class `tree-sitter` crate support
 
 ### Per-language Parsers
 
@@ -78,6 +78,38 @@ Rust:
   impl Type { fn ... }         → Method
   fn (module-level)            → Function
   pub/pub(crate)               → Visibility
+
+Python:
+  class                        → TypeDef
+  def (in class)               → Method
+  def (at module level)        → Function
+  bases (parent classes)       → TypeRelation
+  @decorator                   → Annotation
+  self.x = ... (in __init__)   → Field
+
+## Resolution Layer
+
+### Purpose
+
+Raw parse results often contain ambiguous references (e.g., `self.repo`, `this.service`). The Resolution Layer resolves these into concrete type names across the entire project.
+
+### Phase 1: Local Resolution (Level 1)
+Determines the type of a receiver based on the local scope (class/method).
+- **Self/This**: Maps to the current type name.
+- **Fields**: Maps `self.field` to the declared type of the field.
+- **Parameters**: Resolves calls on method arguments by checking their declared type.
+- **Type Stripping**: `base_type()` recursively strips decorators like `&mut`, `Box<>`, `Arc<>`, `Option<>`, and Kotlin's `?`.
+
+### Phase 2: Global Resolution (Level 2)
+Handles cross-module references using import/use statements.
+- **Alias Mapping**: Builds a map of imported types (e.g., `import com.pkg.User as U`).
+- **Qualified Names**: Replaces imported aliases with fully qualified paths (e.g., `U` → `com.pkg::User`).
+- **Graph Consistency**: Ensures that even if two classes have the same name in different modules, the call graph correctly links to the intended destination.
+
+### Phase 3: Reverse Call Graph (Phase 10)
+After all calls are resolved, a final pass iterates through the graph and populates "called-by" information.
+- **Bi-directional Mapping**: Enables deep structural analysis by answering "who uses this method?".
+- **Reflective Search**: Populates `callers` vectors in `Method` and `Function` structs.
 ```
 
 ## Unified IR (Intermediate Representation)
@@ -94,7 +126,7 @@ Project
 │
 Module
 ├── path: String              # e.g. "com.example.service" or "src/parser"
-├── language: Language         # Java | JavaScript | Kotlin | Rust
+├── language: Language         # Java | JavaScript | Kotlin | Rust | Python
 ├── types: Vec<TypeDef>
 ├── functions: Vec<Function>  # module-level functions (not in a type)
 │
@@ -120,6 +152,7 @@ Method
 ├── return_type: Option<String>
 ├── visibility: Visibility
 ├── calls: Vec<CallRef>       # direct calls to other methods/functions
+├── callers: Vec<CallerRef>   # reverse calls: who calls this?
 ├── annotations: Vec<Annotation>
 ├── is_static: bool
 │
@@ -129,6 +162,7 @@ Function                       # module-level (not belonging to a type)
 ├── return_type: Option<String>
 ├── visibility: Visibility
 ├── calls: Vec<CallRef>
+├── callers: Vec<CallerRef>
 │
 CallRef
 ├── target_type: Option<String>  # None for free functions
@@ -140,14 +174,28 @@ TypeRelation
 │
 Annotation
 ├── name: String
+
+CallerRef
+├── source_type: Option<String> # None for free functions
+├── source_method: String
 ```
 
 ### Design Decisions
 
-1. **No implementation bodies** — only signatures and call references are stored
-2. **Direct calls only** — each method lists what it directly calls; transitive paths are derived from the graph
-3. **String-based type references** — types reference each other by name (not pointers), keeping the model serializable and simple
-4. **Annotations as flat names** — annotation arguments are not captured (reduces complexity, rarely needed for structural understanding)
+1. **No implementation bodies** — only signatures and call references are stored.
+2. **Direct calls only** — each method lists what it directly calls; transitive paths are derived from the graph.
+3. **String-based type references** — types reference each other by name (not pointers), keeping the model serializable and simple.
+4. **Annotations as flat names** — annotation arguments are not captured (reduces complexity, rarely needed for structural understanding).
+
+## Design Decisions: The Shift to Obsidian
+
+Initially, Skelecode used **Mermaid.js** for visual output. This was removed in Phase 6 due to several "breaking points" encountered in large-scale projects:
+
+- **Rendering Overload**: For codebases >50k LOC, static SVG/PNG renderers (like Mermaid) crash or produce "spiderwebs" that are impossible to read.
+- **Loss of Interactivity**: Architecture is best explored through a zoomable, clickable knowledge graph, not a static image.
+
+### The Obsidian Paradigm
+By treating the codebase as a **Knowledge Graph** (Notes = Types, Links = Relationships), we leverage Obsidian's high-performance Graph View and Canvas engines to provide a truly scalable architectural map.
 
 ## Renderer Layer
 
@@ -155,9 +203,9 @@ Annotation
 
 Transform the unified IR into human-readable or machine-readable output.
 
-### Mermaid Renderer
+### Obsidian Vault Renderer
 
-Produces Mermaid class diagram syntax. Details in [output-formats.md](output-formats.md#mermaid-format).
+Produces an interactive Obsidian Vault (directory of Markdown files) with a visual `Topology.canvas` map. Details in [output-formats.md](output-formats.md#obsidian-vault-format).
 
 ### Machine Context Renderer
 
@@ -171,7 +219,7 @@ Provides a terminal-base UI for real-time project browsing and on-the-fly export
 ### Components
 - **WelcomeApp** (`src/tui/welcome_app.rs`): Handles initial path input, language filtering, and exclude patterns.
 - **Main App** (`src/tui/app.rs`): Displays a hierarchical tree of the scanned project.
-- **Export Overlay** (`src/tui/export.rs`): A non-blocking overlay to configure and execute exports (Mermaid/Machine) to files.
+- **Export Overlay** (`src/tui/export.rs`): A non-blocking overlay to configure and execute exports (Vault/Machine) to directories/files.
 - **UI & Themes** (`src/tui/ui.rs`): Handles layout, highlighters, and visual themes using `ratatui`.
 
 ## Directory Structure
@@ -184,14 +232,18 @@ src/
 │   └── mod.rs               # Project, Module, TypeDef, etc.
 ├── parser/                  # Parser layer
 │   ├── mod.rs               # Parser trait + language detection
-│   ├── java.rs              # Implemented (tree-sitter-java)
-│   ├── javascript.rs        # Planned (WIP)
-│   ├── kotlin.rs            # Planned (WIP)
-│   └── rust.rs              # Implemented (tree-sitter-rust)
+│   ├── java.rs              # Java parser
+│   ├── jsts.rs              # Unified JavaScript/TypeScript parser
+│   ├── kotlin.rs            # Kotlin parser
+│   ├── python.rs            # Python parser
+│   └── rust.rs              # Rust parser
 ├── renderer/                # Renderer layer
 │   ├── mod.rs               # Renderer trait
-│   ├── mermaid.rs           # Diagram generation
-│   └── machine.rs           # Compact context generation
+│   ├── canvas.rs            # Obsidian Canvas generation
+│   ├── machine.rs           # Compact context generation
+│   └── obsidian.rs          # Vault structure generation
+├── resolver/                # Resolution layer
+│   └── mod.rs               # Call & Import resolution logic
 └── tui/                     # TUI Layer
     ├── mod.rs               # Runner & main loop
     ├── app.rs               # Main navigation app logic

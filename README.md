@@ -21,7 +21,7 @@ Skelecode scans your source code and produces a compact structural representatio
 
 ```bash
 # Clone and build
-git clone https://github.com/user/skelecode.git
+git clone https://github.com/gianglaodai/skelecode.git
 cd skelecode
 cargo build --release
 

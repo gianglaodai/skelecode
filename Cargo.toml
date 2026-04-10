@@ -3,6 +3,11 @@ name = "skelecode"
 version = "1.0.0"
 edition = "2024"
 description = "Code structure scanner that generates project-wide context graphs for humans and AI"
+license = "MIT"
+repository = "https://github.com/gianglaodai/skelecode"
+readme = "README.md"
+keywords = ["cli", "code-analysis", "tree-sitter", "visualization", "ai-context"]
+categories = ["development-tools", "command-line-utilities"]
 
 [dependencies]
 clap = { version = "4.6.0", features = ["derive"] }

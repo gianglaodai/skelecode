@@ -231,6 +231,52 @@ All tags use the `@` prefix. Indentation indicates nesting (2 spaces per level).
 ```
 ```
 
+### Qualified Type Aliases
+
+Large Java/Kotlin projects produce machine context files where the same qualified type references (e.g. `com.scientia.commonserver.dao::DAOFactory`) repeat thousands of times. The alias system compresses these by generating a deterministic short identifier for each high-frequency qualified type, emitted in a header block at the top of the output.
+
+#### Header Format
+
+```
+@aliases
+$a3b9x = com.example.dao::UserDAO
+$k7f2m = com.example.service::UserService
+$p1qw4 = org.hibernate.criterion::Restrictions
+@end
+
+@lang java
+@pkg com.example.controller
+@type UserController [class]
+  @vis pub
+  @fn getUser(id:Long)->User @vis pub @calls[$a3b9x::findById, $k7f2m::validate]
+```
+
+#### Alias Rules
+
+| Rule | Detail |
+|---|---|
+| **Scope** | Only qualified types (containing `::` with a dot-based package prefix) are candidates |
+| **Threshold** | A type is aliased only when byte savings in the body exceed the header entry cost |
+| **Format** | `$` + 5 base-36 chars = 6 chars total (e.g. `$k7f2m`) |
+| **Determinism** | Alias = `FNV-1a(full_type_string)` → base36. Same type → same alias across all projects |
+| **Collision** | Alphabetically first type wins. With 60M+ address space, collisions are <0.1% for 10K entries |
+| **Definition sites** | `@pkg` lines, `@type` names, `@ext`, `@impl` are NOT aliased — only references in `@calls`/`@callers` |
+
+#### Cross-Project Consistency
+
+When multiple independent projects (e.g. `citadel`, `datamanager`) reference the same shared library type, the alias is identical in all outputs because it is computed solely from the type string, not from the project-specific alias table ordering.
+
+#### Impact on Large Codebases
+
+Measured on a real-world 14MB Java monolith context:
+
+| Metric | Value |
+|---|---|
+| Unique aliasable types | ~5,600 |
+| Total references replaced | ~135,000 |
+| File size reduction | **~45%** (14MB → ~7.7MB) |
+| Alias header overhead | ~220KB |
+
 ### Design Principles
 
 1. **Minimal tokens** — no filler words, no redundant syntax. Every character carries meaning
